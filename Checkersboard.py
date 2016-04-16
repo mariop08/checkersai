@@ -2,6 +2,7 @@ __author__ = 'Mario Pena'
 # Simple Checkers game on 5X5 board
 # Implemented AI as an opponent
 
+import copy
 
 class Piece:
     def __init__(self, x, y, p):
@@ -73,6 +74,9 @@ class CheckerBoard:
     def within_boundaries(self, x, y):
         return 0 <= x <= 5 and 0 <= y <= 5
 
+    def clone(self):
+        return copy.copy(self)
+
 
 def initialize_pieces(player, checker_board):
     if player.player == "R":
@@ -88,7 +92,7 @@ def piece_found(Player, x, y):
     retval = False;
     for cord, pieces in Player.pieces.iteritems():
         if cord == (x,y):
-            print cord
+            #print cord
             retval = True;
     return retval
 
@@ -97,6 +101,7 @@ class Player:
     def __init__(self, p, checker_board):
         self.player = p
         self.pieces = initialize_pieces(self, checker_board)
+
 
     def move(self, checker_board, x1, y1, x2, y2):
         # Check if space is empty
@@ -111,12 +116,15 @@ class Player:
 
 
 x = CheckerBoard()
-y = Player("R", x)
-z = Player("B", x)
+red = Player("R", x)
+black = Player("B", x)
 x.print_board()
 print x.is_empty(0, 1)
-z.move(x, 4, 0, 1, 1)
+black.move(x, 4, 0, 1, 1)
+black.move(x, 2, 0, 1, 1)
+red.move(x, 2, 4, 1, 1)
+red.move(x, 0, 0, 1, 1)
 print "Red Pieces: ",
-print y.pieces
+print red.pieces.keys()
 print "Black Pieces: ",
-print z.pieces
+print black.pieces.keys()

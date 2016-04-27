@@ -4,6 +4,7 @@ __author__ = 'Mario Pena'
 # Assumption: AI will always be the Black Player
 import copy
 
+exec_count = 0
 
 class Piece:
     def __init__(self, x, y, p):
@@ -42,6 +43,8 @@ class CheckerBoard:
         self.black_pieces = []
         self.won = ""
         self.turn = 1  # 1 is player, -1 is AI
+        self.red_player = None
+        self.black_player = None
 
     def print_board(self):
         for i in range(5):
@@ -102,14 +105,20 @@ class CheckerBoard:
         for x, y in self.black_pieces:
             if y == 0:
                 count_b += 1
-        if count_b == len(self.black_piece):
+        if count_b == len(self.black_pieces):
             self.won = "B"
 
         for x, y in self.red_pieces:
             if y == 0:
                 count_r += 1
-        if count_r == len(self.red_piece):
+        if count_r == len(self.red_pieces):
             self.won = "R"
+
+        # Check if either player does not have any more moves
+        if not self.generate_moves(self.black_player):
+            self.won = "R"
+        if not self.generate_moves(self.red_player):
+            self.won =  "B"
 
     def generate_moves(self, player):
 
@@ -137,6 +146,26 @@ class CheckerBoard:
                 retlist.append((x, y, x+2, y+u))
 
         return retlist
+
+    # Define Red player
+    def set_red_player(self, player):
+        self.red_player = player
+
+    # Return Red Player
+    def get_red_player(self):
+        return self.red_player
+
+    def set_black_player(self, player):
+        self.black_player = player
+
+    def get_black_player(self):
+        return self.black_player
+
+    def get_other_player(self, player):
+        if player.player == "R":
+            return self.black_player
+        else:
+            return self.red_player
 
 
 def initialize_pieces(player, checker_board):
@@ -195,7 +224,6 @@ class Player:
                     return "You cannot capture your own piece"
 
                 # Move player piece into space after jumping
-                self.pieces[(x2, y2)] = self.pieces[(x1, y1)]
                 checker_board.board[y2][x2] = checker_board.board[y1][x1]
                 checker_board.board[y1][x1] = "-"
                 del checker_board.red_pieces[(x1, y1)]
@@ -236,10 +264,12 @@ class Player:
 
             # Red move's into an unoccupied space
             if y2 - 1 == y1 and x2 + 1 == x1 or y2 - 1 == y1 and x2 - 1 == x1:
-                self.pieces[(x2, y2)] = self.pieces[(x1, y1)]
                 checker_board.board[y2][x2] = checker_board.board[y1][x1]
                 checker_board.board[y1][x1] = "-"
-                del self.pieces[(x1, y1)]
+                checker_board.red_pieces[x2, y2] = checker_board.board[y2][x2]
+
+                del checker_board.red_pieces[(x1, y1)]
+                self.update(checker_board)
 
                 checker_board.turn *= -1
                 return 0
@@ -254,7 +284,6 @@ class Player:
                     return "You cannot capture your own piece"
 
                 # Move player piece into space after jumping
-                self.pieces[(x2, y2)] = self.pieces[(x1, y1)]
                 checker_board.board[y2][x2] = checker_board.board[y1][x1]
                 checker_board.board[y1][x1] = "-"
                 del checker_board.black_pieces[(x1, y1)]
@@ -295,29 +324,166 @@ class Player:
 
             # Black move's into an unoccupied space
             if y2 + 1 == y1 and x2 - 1 == x1 or y2 + 1 == y1 and x2 + 1 == x1:
-                self.pieces[(x2, y2)] = self.pieces[(x1, y1)]
                 checker_board.board[y2][x2] = checker_board.board[y1][x1]
                 checker_board.board[y1][x1] = "-"
-                del self.pieces[(x1, y1)]
+                checker_board.black_pieces[x2, y2] = checker_board.board[y2][x2]
+
+                del checker_board.black_pieces[(x1, y1)]
                 # Capture a piece by jumping over it
+
+                self.update(checker_board)
 
                 checker_board.turn *= -1
                 return 0
 
 
+def calc_heuristic(board, player):
+
+    position_sum = 0
+
+    if player.player == "R":
+        position_val = .25
+        player_pieces = board.red_pieces
+
+        for x, y in player_pieces:
+            position_sum += position_val * y
+    else:
+        position_val = .25
+        player_pieces = board.black_pieces
+
+        for x, y in player_pieces:
+            if y == 4:
+                y = 0
+            if y == 3:
+                y = 1
+            if y == 1:
+                y = 3
+            if y == 0:
+                y = 4
+
+            position_sum += position_val * y
+
+    return position_sum + len(player_pieces)
+
+
 class Node:
-    def __init__(self, checker_board):
+    def __init__(self, checker_board, t, player):
         self.current_board = checker_board
         self.children = []
+        self.player = player
+        # Max = 1
+        # Min = -1
+        self.type = t
+        self.move = None
 
-def calc_heuristic(board, player):
-    if player.self == "R":
-        return 0.2
+    def get_board(self):
+        return self.current_board
 
-def print_current_board(board, player1, player2):
+    def get_children(self):
+        return self.children
+
+    def generate_children(self):
+
+        if self.player == "R":
+            move_list = self.get_board().generate_moves(self.get_board().get_red_player())
+            next_player = "B"
+        else:
+            move_list = self.get_board().generate_moves(self.get_board().get_black_player())
+            next_player = "R"
+
+        for move in move_list:
+
+            board_clone = self.current_board.clone()
+
+            if self.player == "R":
+                board_clone.get_red_player().move(board_clone, move[0], move[1], move[2], move[3])
+            else:
+                board_clone.get_black_player().move(board_clone, move[0], move[1], move[2], move[3])
+
+            new_node = Node(board_clone, -1*self.type, next_player)
+            new_node.set_move(move)
+
+            self.children.append(new_node)
+
+    def set_move(self, move):
+        self.move = move
+
+
+def leaf(node):
+    if node.player == "R":
+        if not node.get_board().generate_moves(node.get_board().get_red_player()):
+            return True
+    if node.player == "B":
+        if not node.get_board().generate_moves(node.get_board().get_black_player()):
+            return True
+
+    return False
+
+
+def min_max(node, depth, minimum, maximum):
+
+    if leaf(node) or depth == 0:
+        if node.player == "R":
+            return calc_heuristic(node.current_board, node.current_board.get_red_player())
+        else:
+            return calc_heuristic(node.current_board, node.current_board.get_red_player())
+
+    # Max Node
+    if node.type == 1:
+        node.generate_children()
+
+        current_value = minimum
+
+        for child in node.get_children():
+            global exec_count
+            exec_count += 1
+            new_value = min_max(child, depth - 1, current_value, maximum)
+            if new_value > current_value:
+                current_value = new_value
+            if current_value > maximum:
+                return maximum
+        return current_value
+
+    # Min Node
+    if node.type == -1:
+        node.generate_children()
+
+        current_value = maximum
+
+        for child in node.get_children():
+            global exec_count
+            exec_count += 1
+            new_value = min_max(child, depth - 1, minimum, current_value)
+            if new_value < current_value:
+                current_value = new_value
+            if current_value < minimum:
+                return minimum
+        return current_value
+
+
+def root_min_max(node, depth):
+    best_move = None
+    max_eval = float('-infinity')
+
+    node.generate_children()
+    current_value = float('infinity')
+
+    for child in node.get_children():
+        global exec_count
+        exec_count += 1
+        current_value = min_max(child, depth - 1,  float('-infinity'), current_value)
+
+        if current_value > max_eval:
+            max_eval = current_value
+            best_move = child.move
+
+    return best_move
+
+
+def print_current_board(board):
     board.print_board()
-    print "Red Pieces:   ", player1.pieces.keys()
-    print "Black Pieces: ", player2.pieces.keys(), "\n"
+    print "Red Pieces:   ", board.get_red_player().pieces.keys()
+    print "Black Pieces: ", board.get_black_player().pieces.keys(), "\n"
 
 
 def test_run():
@@ -344,27 +510,115 @@ def test_run():
 
 print "Welcome to Checkers!"
 # Initialize board and player objects
-game_board = CheckerBoard()
-red = Player("R", game_board)
-black = Player("B", game_board)
+gboard = CheckerBoard()
+r = Player("R", gboard)
+b = Player("B", gboard)
 
-while (game_board.won == ""):
-    # Player's turn
-    while (game_board.turn == 1):
-        print_current_board(game_board, red, black)
-        print game_board.generate_moves(red), "\n"
-        my_input = raw_input("Red player enter a move: x1 y1 x2 y2\n")
+gboard.set_red_player(r)
+gboard.set_black_player(b)
 
-        x1, y1, x2, y2 = my_input.split()
 
-        retval = red.move(game_board, int(x1), int(y1), int(x2), int(y2))
+def game(game_board, red, black):
+    while game_board.won == "":
+        # Player's turn
+        while game_board.turn == 1:
+            print_current_board(game_board)
+            print "Potential Red Moves: ", game_board.generate_moves(red), "\n"
+            my_input = raw_input("Red player enter a move: x1 y1 x2 y2\n")
 
-        if not retval == "C" and not retval == "M":
-            print retval, "\n"
+            x1, y1, x2, y2 = my_input.split()
 
-    while(game_board.turn == -1):
-        print "AI turn!"
+            retval = red.move(game_board, int(x1), int(y1), int(x2), int(y2))
 
-        print game_board.generate_moves(black)
+            if not retval == "C" and not retval == "M":
+                print retval, "\n"
 
-        game_board.turn *= -1
+        while game_board.turn == -1 and game_board.won == "":
+            print "AI turn!"
+
+            print "Potential Black Moves: ", game_board.generate_moves(black)
+
+            game_board.turn *= -1
+
+        print "Printing Red pieces from Board: ", game_board.get_red_player().pieces.keys()
+        game_board.has_won()
+
+    if game_board.won == "R":
+        print "Red Player has won!"
+    else:
+        print "Black Player has won!"
+
+# game(gboard, r, b)
+
+rootr = Node(gboard, 1, "R")
+
+inf = float('infinity')
+ninf = -float('infinity')
+
+m = root_min_max(rootr, 3)
+print m, "\nTimes executed: ", exec_count
+r.move(gboard, m[0], m[1], m[2], m[3])
+exec_count = 0
+print "Reset counter back to: ", exec_count, "\n"
+print_current_board(gboard)
+##################################################
+rootb = Node(gboard, 1, "B")
+m = root_min_max(rootb, 3)
+print m, "\nTimes executed: ", exec_count
+b.move(gboard, m[0], m[1], m[2], m[3])
+print "Reset counter back to: ", exec_count
+print_current_board(gboard)
+##################################################
+rootr = Node(gboard, 1, "R")
+m = root_min_max(rootr, 3)
+print m, "\nTimes executed: ", exec_count
+r.move(gboard, m[0], m[1], m[2], m[3])
+exec_count = 0
+print "Reset counter back to: ", exec_count, "\n"
+print_current_board(gboard)
+##################################################
+rootb = Node(gboard, 1, "B")
+m = root_min_max(rootb, 3)
+print m, "\nTimes executed: ", exec_count
+b.move(gboard, m[0], m[1], m[2], m[3])
+print "Reset counter back to: ", exec_count
+print_current_board(gboard)
+##################################################
+rootr = Node(gboard, 1, "R")
+m = root_min_max(rootr, 3)
+print m, "\nTimes executed: ", exec_count
+r.move(gboard, m[0], m[1], m[2], m[3])
+exec_count = 0
+print "Reset counter back to: ", exec_count, "\n"
+print_current_board(gboard)
+##################################################
+rootb = Node(gboard, 1, "B")
+m = root_min_max(rootb, 3)
+print m, "\nTimes executed: ", exec_count
+b.move(gboard, m[0], m[1], m[2], m[3])
+print "Reset counter back to: ", exec_count
+print_current_board(gboard)
+##################################################
+rootr = Node(gboard, 1, "R")
+m = root_min_max(rootr, 3)
+print m, "\nTimes executed: ", exec_count
+r.move(gboard, m[0], m[1], m[2], m[3])
+exec_count = 0
+print "Reset counter back to: ", exec_count, "\n"
+print_current_board(gboard)
+##################################################
+rootb = Node(gboard, 1, "B")
+m = root_min_max(rootb, 3)
+print m, "\nTimes executed: ", exec_count
+b.move(gboard, m[0], m[1], m[2], m[3])
+print "Reset counter back to: ", exec_count
+print_current_board(gboard)
+##################################################
+rootr = Node(gboard, 1, "R")
+m = root_min_max(rootr, 3)
+print m, "\nTimes executed: ", exec_count
+r.move(gboard, m[0], m[1], m[2], m[3])
+exec_count = 0
+print "Reset counter back to: ", exec_count, "\n"
+print_current_board(gboard)
+##################################################
